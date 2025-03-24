@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IP Camera Stream</title>
+</head>
+<body>
+    <nav>
+        <a href="/">Home</a> |
+        <a href="/about">About</a>
+    </nav>
+    <h1>Welcome to my birds counting app</h1>
+    {% if camera_available %}
+        <h2>Live Camera Feed</h2>
+        <img src="{{ url_for('video_feed') }}" width="1280" height="720">
+    {% else %}
+        <h2>Error: Camera Not Found</h2>
+        <img src="{{ url_for('static', filename='no_camera.jpg') }}" width="1280" height="720">
+    {% endif %}
+</body>
+</html>
