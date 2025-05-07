@@ -12,6 +12,11 @@ import birds_mathlib
 from dataclasses import dataclass
 
 #cap = cv2.VideoCapture(0) #for automatic USBCam (0-web cam default)
+# RTSP Stream URL
+rtsp_url = "rtsp://10.0.0.6:10554/udp/av0_0"
+#rtsp_url = "rtspsrc location=rtsp://10.0.0.6:10554/udp/av0_0 ! decodebin ! videoconvert ! appsink"
+#rtsp_url = "rtsp://10.0.0.6:10554/udp/av0_0?analyzeduration=5000000&probesize=5000000"
+os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "analyzeduration;1000000|probesize;5000000"
 
 @dataclass
 class Object:
@@ -19,7 +24,7 @@ class Object:
     mass_centre: int
     square: int
 
-class ObjectsList:    
+class ObjectsList:
     def __init__(self, max_list_size = 100):
         self.MAX_LIST_SIZE = max_list_size
         self.items = []
@@ -44,22 +49,22 @@ class ObjectsList:
         """Print all people in the list."""
         for i, item in enumerate(self.items):
             print(f"frame_number: {item.frame_number}, mass_centre: {item.mass_centre}, square: {item.square}")
-            
+
     def getByFrameNumber(self, frame_number):
         """Return a list """
-        return [(ind, item) for ind, item in enumerate(self.items) if item.frame_number == frame_number]        
-        
+        return [(ind, item) for ind, item in enumerate(self.items) if item.frame_number == frame_number]
+
     def isEmpty(self):
         return len(self.items) == 0
 
 class Tracker:
-    
+
     def __init__(self, centre_moving = 20, square_change = 20):
         self.birds_list = ObjectsList()
         self.birds_count = 0
         self.CENTRE_MOVING = centre_moving
         self.SQUARE_CHANGE = square_change
-        
+
     def addObjectToTrack(self, frames_counter, box):
         mass_centre = birds_mathlib.massCentre(box)
         square = birds_mathlib.Square(box)
@@ -76,20 +81,20 @@ class Tracker:
     # find closest by Eucleadean distance box in the list
     def getClosest(self, frames_counter, box):
         prev_frame_objects = self.birds_list.getByFrameNumber(frames_counter)   # returns list, usually {1}
-        return 
-        
+        return
+
     def track(self, frames_counter, bounding_box):
         mass_centre = birds_mathlib.massCentre(bounding_box)
         square = birds_mathlib.Square(bounding_box)
         print("mass_centre=", mass_centre, "square=", square)
-        
+
         prev_frame_objects = self.birds_list.getByFrameNumber(frames_counter - 1) # get all boxes from prev. frame
         #print(prev_frame_objects)
 
-        if prev_frame_objects:            
-            dist_v = [(index, birds_mathlib.distEuclides(bird_obj.mass_centre, mass_centre)) for index, bird_obj in prev_frame_objects] 
-            #print("dist_v=", dist_v)        
-            min_index, min_dist = min(dist_v, key=lambda x: x[1])  
+        if prev_frame_objects:
+            dist_v = [(index, birds_mathlib.distEuclides(bird_obj.mass_centre, mass_centre)) for index, bird_obj in prev_frame_objects]
+            #print("dist_v=", dist_v)
+            min_index, min_dist = min(dist_v, key=lambda x: x[1])
             #print(min_index, min_dist)
             if min_dist < self.CENTRE_MOVING:# and  diffSq < self.SQUARE_CHANGE:
                 print("Frame ", frames_counter, ": modify tracked object ", min_index)
@@ -109,10 +114,13 @@ class Tracker:
 
 class DetectBirds(object):
     HISTORY = 100
-    
+
     def __init__(self, camera_url, mx_num_birds = 1):
-        self.cap = cv2.VideoCapture(camera_url)
-        self.MAX_NUM_BIRDS = mx_num_birds        
+        self.cap = cv2.VideoCapture(camera_url, cv2.CAP_FFMPEG)
+        if not self.cap.isOpened():
+            print("Error: Could not open RTSP/file stream")
+            exit()
+        self.MAX_NUM_BIRDS = mx_num_birds
         # Object detection from Stable camera
         self.object_detector = cv2.createBackgroundSubtractorMOG2(history=DetectBirds.HISTORY, varThreshold=40, detectShadows=False)
         self.tracker = Tracker(20, 20)
@@ -122,17 +130,18 @@ class DetectBirds(object):
         # Read first self.HISTORY frames to learn the algorithm
         for frames_counter in range(DetectBirds.HISTORY):
             ret, raw_frame = self.cap.read()
+            print(ret)
             if not ret:
                 self.running = False
-        
+
     def detect(self):
         frames_counter = 0
         birds_counter = 0
         # Define kernel for noise removal
         kernel = np.ones((3, 3), np.uint8)
-        
+
         self.preDetect()
-           
+
         while self.running:
             # Capture frame-by-frame from a video
             ret, raw_frame = self.cap.read()
@@ -166,8 +175,8 @@ class DetectBirds(object):
                         if is_new_bird:
                             birds_counter = birds_counter + 1
                             cv2.imwrite(f"birds_images/bird_{birds_counter}.jpg", frame)
-                        cv2.imshow('frame', frame)
-                        #cv2.imshow('mask', mask)                        
+                        #cv2.imshow('frame', frame)
+                        #cv2.imshow('mask', mask)
                 if cv2.waitKey(1) & 0xFF == ord('q'):
                     self.running = False
             else:
@@ -182,7 +191,8 @@ class DetectBirds(object):
 if __name__ == "__main__":
     directory = "birds_images"    # Create the directory if it does not exist
     os.makedirs(directory, exist_ok=True)
-    
-    D = DetectBirds("bird_on_tree.mp4")
+
+    #D = DetectBirds("birds.mp4")
+    D = DetectBirds(rtsp_url)
     D.detect()
-    
+
